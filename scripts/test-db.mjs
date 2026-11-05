@@ -193,7 +193,7 @@ try {
         }
   });
   await ok('rework requires meaningful comment and rejects oversized comment', async () => {
-    for (const comment of [null, '', '   ', 'x'.repeat(4001)])
+    for (const comment of [null, '', '   ', ' \n\t\r ', 'x'.repeat(4001)])
       await assert.rejects(
         asUser(manager, "select change_task_status($1,'review','rework',$2)", [uid(102), comment]),
         /comment|Comment/,

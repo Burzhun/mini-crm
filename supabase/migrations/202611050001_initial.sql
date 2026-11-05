@@ -80,7 +80,7 @@ create function private.guard_task() returns trigger
 language plpgsql security definer set search_path = '' as $$
 declare
   v_manager boolean := private.is_manager();
-  v_comment text := nullif(btrim(current_setting('app.task_comment', true)), '');
+  v_comment text := nullif(regexp_replace(current_setting('app.task_comment', true), '^\s+|\s+$', '', 'g'), '');
 begin
   if auth.uid() is null then raise exception 'Authentication required' using errcode = '42501'; end if;
   if tg_op = 'INSERT' then
@@ -117,7 +117,7 @@ begin
     insert into public.task_history(task_id,actor_id,from_status,to_status) values(new.id,auth.uid(),null,new.status);
   elsif new.status is distinct from old.status then
     insert into public.task_history(task_id,actor_id,from_status,to_status,comment)
-    values(new.id,auth.uid(),old.status,new.status,nullif(btrim(current_setting('app.task_comment',true)),''));
+    values(new.id,auth.uid(),old.status,new.status,nullif(regexp_replace(current_setting('app.task_comment',true), '^\s+|\s+$', '', 'g'),''));
   end if;
   return new;
 end; $$;
