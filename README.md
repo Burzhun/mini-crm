@@ -15,6 +15,22 @@ npm run dev
 
 В PowerShell вместо `cp` можно использовать `Copy-Item`. В браузере: http://127.0.0.1:5173. Для production: `npm run build`, затем разместить `dist` на статическом хостинге. `npm run preview` проверяет production-сборку локально. На Vercel/Netlify: build `npm run build`, output `dist`; добавить две публичные переменные `VITE_SUPABASE_*` перед сборкой. `.openai/hosting.json` относится к публикации через Sites и не нужен Vercel/Netlify.
 
+## Публикация на Vercel
+
+Рабочее приложение: [kontur-crm-kappa.vercel.app](https://kontur-crm-kappa.vercel.app). Проект: [burzhun/kontur-crm](https://vercel.com/burzhun/kontur-crm).
+
+`vercel.json` задаёт Vite, установку `npm ci`, сборку `npm run build` и каталог `dist`. В production-переменных проекта настроены только `VITE_SUPABASE_URL` и публичный `VITE_SUPABASE_ANON_KEY`. `.vercelignore` исключает `.env*`, серверные скрипты и служебные файлы из загрузки.
+
+Для повторной публикации из папки `crm`:
+
+```sh
+npx vercel@latest login
+npx vercel@latest link --yes --scope burzhun --project kontur-crm
+npx vercel@latest deploy --prod --yes
+```
+
+Если папка уже привязана и вход выполнен, достаточно последней команды. Привязка хранится в игнорируемом `.vercel/`. База Supabase при публикации фронтенда не пересоздаётся.
+
 ## Подготовка Supabase
 
 1. Создать проект. В SQL Editor **пустой базы** выполнить [единственную миграцию](supabase/migrations/202611050001_initial.sql), либо применить её через Supabase CLI: `supabase link --project-ref <ref>` и `supabase db push`. Файл сразу создаёт итоговую схему, права доступа, сохранение истории после удаления задач и корректный ответ HTTP 409 при конфликте статусов. В уже настроенном проекте, где выполнены прежние три миграции, схема соответствует этому файлу — повторно выполнять его не требуется.
