@@ -36,7 +36,9 @@ function inspect(content, location) {
   if (tokens.some(isPrivileged)) findings.push({ location, reason: 'service_role JWT' });
 }
 const tracked = git('ls-files', '-z').split('\0').filter(Boolean);
-for (const file of tracked) inspect(readFileSync(file, 'utf8'), `working tree: ${file}`);
+for (const file of tracked) {
+  if (existsSync(file)) inspect(readFileSync(file, 'utf8'), `working tree: ${file}`);
+}
 const versions = git('rev-list', '--objects', '--all').split('\n').filter(Boolean);
 const objectIds = [...new Set(versions.map((line) => line.split(' ')[0]))];
 const batch = execFileSync('git', ['cat-file', '--batch'], {

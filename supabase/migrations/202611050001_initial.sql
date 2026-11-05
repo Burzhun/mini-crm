@@ -25,7 +25,7 @@ create table public.tasks (
 );
 create table public.task_history (
   id uuid primary key default gen_random_uuid(),
-  task_id uuid not null references public.tasks(id) on delete cascade,
+  task_id uuid not null,
   actor_id uuid not null references public.profiles(id),
   from_status public.task_status,
   to_status public.task_status not null,
@@ -35,6 +35,10 @@ create table public.task_history (
 create index tasks_assignee_idx on public.tasks(assignee_id);
 create index tasks_project_idx on public.tasks(project_id);
 create index task_history_task_idx on public.task_history(task_id, created_at);
+
+-- Keep the original task UUID after deletion; only the status trigger writes history.
+comment on column public.task_history.task_id is
+  'Original task UUID; intentionally no cascading FK so audit events survive task/project deletion.';
 
 create schema if not exists private;
 revoke all on schema private from public;
@@ -72,7 +76,7 @@ create policy tasks_create on public.tasks for insert to authenticated with chec
 create policy tasks_edit on public.tasks for update to authenticated using (private.is_manager()) with check (private.is_manager());
 create policy tasks_delete on public.tasks for delete to authenticated using (private.is_manager());
 create policy history_read on public.task_history for select to authenticated using (
-  exists (select 1 from public.tasks t where t.id = task_history.task_id)
+  private.is_manager() or exists (select 1 from public.tasks t where t.id = task_history.task_id)
 );
 
 -- Trigger is the single writer of history; clients have SELECT only.
@@ -133,7 +137,9 @@ begin
   select * into v_task from public.tasks where id = p_task_id for update;
   if not found then raise exception 'Task is unavailable' using errcode = '42501'; end if;
   if not private.is_manager() and v_task.assignee_id <> auth.uid() then raise exception 'Task is unavailable' using errcode = '42501'; end if;
-  if p_expected_status is null or v_task.status <> p_expected_status then raise exception 'Task was changed. Refresh and retry.' using errcode = '40001'; end if;
+  if p_expected_status is null or v_task.status <> p_expected_status then
+    raise exception 'Task was changed. Refresh and retry.' using errcode = 'PT409';
+  end if;
   if p_target is null or p_target = v_task.status then raise exception 'Status must change' using errcode = '23514'; end if;
   perform set_config('app.task_comment', coalesce(p_comment,''), true);
   -- The trigger validates the actor and edge, then atomically appends history.
