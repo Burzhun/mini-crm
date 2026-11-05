@@ -9,6 +9,7 @@
     "preview": "vite preview --host 127.0.0.1",
     "test": "vitest run src",
     "test:e2e": "playwright test",
+    "test:seed": "node --test scripts/seed-config.test.mjs",
     "test:db": "node scripts/test-db.mjs",
     "seed": "node --env-file=.env scripts/seed.mjs"
   },
@@ -16,7 +17,8 @@
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.468.0",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "ws": "^8.22.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.56.0",

@@ -33,7 +33,15 @@ test('manager CRUD and complete review / rework cycle across both roles', async 
   await page.getByRole('button', { name: /Проверить новый объект/ }).click();
   await page.getByRole('button', { name: 'Вернуть на доработку' }).click();
   await expect(page.getByRole('alert')).toContainText('Укажите');
+  const comment = page.getByLabel(/Комментарий/);
+  await expect(comment).toHaveAttribute('aria-invalid', 'true');
+  await expect(comment).toBeFocused();
+  await comment.fill('  \n\t ');
+  await page.getByRole('button', { name: 'Вернуть на доработку' }).click();
+  await expect(page.getByRole('alert')).toContainText('Укажите');
   await page.getByLabel(/Комментарий/).fill('Исправьте крепления');
+  await expect(comment).toHaveAttribute('aria-invalid', 'false');
+  await expect(page.getByRole('alert')).toHaveCount(0);
   await page.getByRole('button', { name: 'Вернуть на доработку' }).click();
   await expect(page.getByRole('dialog')).toContainText('Исправьте крепления');
   await page.getByRole('button', { name: 'Закрыть', exact: true }).click();

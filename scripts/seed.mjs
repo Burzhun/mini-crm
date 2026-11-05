@@ -1,6 +1,8 @@
 // Server-side only: run manually with .env, never bundled into the frontend.
 import { createClient } from '@supabase/supabase-js';
+import WebSocket from 'ws';
 import { randomUUID } from 'node:crypto';
+import { validateAdminKey } from './seed-config.mjs';
 const env = process.env;
 for (const name of [
   'SUPABASE_URL',
@@ -11,8 +13,14 @@ for (const name of [
   'SEED_WORKER_2_PASSWORD',
 ])
   if (!env[name]) throw new Error(`Missing ${name}`);
-const options = { auth: { persistSession: false, autoRefreshToken: false } };
-const admin = createClient(env.SUPABASE_URL, env.SUPABASE_SERVICE_ROLE_KEY, options);
+const adminKey = validateAdminKey(env.SUPABASE_SERVICE_ROLE_KEY);
+const options = {
+  auth: { persistSession: false, autoRefreshToken: false },
+  // Supabase initializes Realtime even though seed uses only Auth and REST.
+  // Node.js 20 requires an explicit WebSocket implementation.
+  realtime: { transport: WebSocket },
+};
+const admin = createClient(env.SUPABASE_URL, adminKey, options);
 const result = (r) => {
   if (r.error) throw new Error(r.error.message);
   return r.data;
@@ -30,7 +38,7 @@ const accounts = [
 const users = [];
 const { users: listed } = result(await admin.auth.admin.listUsers({ perPage: 1000 }));
 for (const [email, name, role, password] of accounts) {
-  if (password.length < 12) throw new Error('Use seed passwords with at least 12 characters.');
+  if (password.length < 6) throw new Error('Use seed passwords with at least 6 characters.');
   let user = listed.find((u) => u.email === email);
   if (!user)
     user = result(await admin.auth.admin.createUser({ email, password, email_confirm: true })).user;

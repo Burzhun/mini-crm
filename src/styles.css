@@ -1209,6 +1209,16 @@ textarea::placeholder {
   font-size: 10px;
   color: #829183;
 }
+.status-actions textarea[aria-invalid='true'] {
+  border-color: #b5564e;
+  outline-color: #c78a84;
+}
+.field-error {
+  margin: 8px 0 0;
+  color: #a85149;
+  font-size: 11px;
+  line-height: 1.6;
+}
 .status-actions > div {
   display: flex;
   gap: 8px;
