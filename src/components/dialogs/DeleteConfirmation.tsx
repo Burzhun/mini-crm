@@ -7,8 +7,8 @@ export default function DeleteConfirmation({ target }: { target: DeleteTarget })
       <p className="delete-copy">
         Удалить «{target.name}»?{' '}
         {target.type === 'projects'
-          ? 'Будут удалены все задачи объекта и их история.'
-          : 'История задачи тоже будет удалена.'}{' '}
+          ? 'Будут удалены все задачи объекта. История изменений сохранится в базе.'
+          : 'История изменений сохранится в базе.'}{' '}
         Это действие нельзя отменить.
       </p>
       <div className="form-actions">

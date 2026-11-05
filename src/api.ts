@@ -43,7 +43,9 @@ export class Repository {
         projects: demoState.projects.filter(
           (p) => this.user.role === 'manager' || tasks.some((t) => t.project_id === p.id),
         ),
-        history: demoState.history.filter((h) => tasks.some((t) => t.id === h.task_id)),
+        history: demoState.history.filter(
+          (h) => this.user.role === 'manager' || tasks.some((t) => t.id === h.task_id),
+        ),
       });
     }
     const results = await Promise.all([
@@ -134,7 +136,6 @@ export class Repository {
       .filter((t) => (type === 'tasks' ? t.id === id : t.project_id === id))
       .map((t) => t.id);
     demoState.tasks = demoState.tasks.filter((t) => !ids.includes(t.id));
-    demoState.history = demoState.history.filter((h) => !ids.includes(h.task_id));
     if (type === 'projects') demoState.projects = demoState.projects.filter((p) => p.id !== id);
     persist();
   }

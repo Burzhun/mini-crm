@@ -11,6 +11,8 @@
     "test:e2e": "playwright test",
     "test:seed": "node --test scripts/seed-config.test.mjs",
     "test:db": "node scripts/test-db.mjs",
+    "audit:cloud": "node --env-file=.env scripts/audit-cloud.mjs",
+    "audit:secrets": "node scripts/audit-secrets.mjs",
     "seed": "node --env-file=.env scripts/seed.mjs"
   },
   "dependencies": {

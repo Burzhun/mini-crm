@@ -1,6 +1,6 @@
 import pg from 'pg';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, readdir } from 'node:fs/promises';
 import { randomUUID } from 'node:crypto';
 const url = process.env.TEST_DATABASE_URL;
 if (!url)
@@ -45,12 +45,10 @@ try {
     create schema auth; create table auth.users(id uuid primary key);
     create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.jwt.claim.sub',true),'')::uuid $$;
     grant usage on schema auth to authenticated,anon; grant execute on function auth.uid() to authenticated,anon;`);
-  await db.query(
-    await readFile(
-      new URL('../supabase/migrations/202611050001_initial.sql', import.meta.url),
-      'utf8',
-    ),
-  );
+  const migrations = new URL('../supabase/migrations/', import.meta.url);
+  for (const name of (await readdir(migrations)).filter((name) => name.endsWith('.sql')).sort()) {
+    await db.query(await readFile(new URL(name, migrations), 'utf8'));
+  }
   await db.query('insert into auth.users(id) values ($1),($2),($3),($4)', [
     manager,
     worker,
@@ -81,6 +79,46 @@ try {
   await db.query(
     "insert into task_history(task_id,actor_id,to_status) values($1,$2,'new'),($3,$4,'new')",
     [uid(100), manager, uid(200), secondManager],
+  );
+  await ok('RLS is enabled on every CRM table', async () => {
+    const tables = await db.query(
+      "select relname, relrowsecurity from pg_class where oid in ('public.profiles'::regclass,'public.projects'::regclass,'public.tasks'::regclass,'public.task_history'::regclass)",
+    );
+    assert.equal(tables.rowCount, 4);
+    assert.ok(tables.rows.every((table) => table.relrowsecurity));
+  });
+  await ok(
+    'authenticated requests without a user cannot read records or call status RPC',
+    async () => {
+      for (const table of ['profiles', 'projects', 'tasks', 'task_history']) {
+        assert.equal((await asUser(null, `select * from ${table}`)).rowCount, 0);
+      }
+      await assert.rejects(
+        asUser(null, "select change_task_status($1,'new','in_progress',null)", [uid(100)]),
+        /Authentication required/,
+      );
+    },
+  );
+  await ok(
+    'client roles cannot call trigger functions or supply a status when creating tasks',
+    async () => {
+      for (const name of ['private.guard_task()', 'private.record_task_status()']) {
+        const permission = await db.query('select has_function_privilege($1,$2,$3) as allowed', [
+          'authenticated',
+          name,
+          'EXECUTE',
+        ]);
+        assert.equal(permission.rows[0].allowed, false);
+      }
+      await assert.rejects(
+        asUser(
+          manager,
+          "insert into tasks(title,project_id,assignee_id,author_id,status) values('Spoofed',$1,$2,$3,'accepted')",
+          [p1, worker, manager],
+        ),
+        /permission denied/,
+      );
+    },
   );
   await ok('anonymous reads and RPC denied', async () => {
     for (const table of ['profiles', 'projects', 'tasks', 'task_history'])
@@ -202,7 +240,7 @@ try {
   await ok('stale updates fail instead of overwriting current state', async () => {
     await assert.rejects(
       asUser(worker, "select change_task_status($1,'review','in_progress',null)", [uid(100)]),
-      /Refresh and retry/,
+      (error) => error.code === 'PT409' && /Refresh and retry/.test(error.message),
     );
   });
   await ok('new tasks always get authentic initial history', async () => {
@@ -274,7 +312,34 @@ try {
       /worker/,
     );
   });
-  await ok('manager can edit and delete objects with task history cascade', async () => {
+  await ok(
+    'deleting a task retains history and client API cannot erase orphan events',
+    async () => {
+      await db.query('begin');
+      try {
+        await db.query('set local role authenticated');
+        await db.query("select set_config('request.jwt.claim.sub',$1,true)", [manager]);
+        await db.query('delete from tasks where id=$1', [uid(100)]);
+        assert.equal((await db.query('select * from tasks where id=$1', [uid(100)])).rowCount, 0);
+        assert.equal(
+          (await db.query('select * from task_history where task_id=$1', [uid(100)])).rowCount,
+          1,
+        );
+        await db.query("select set_config('request.jwt.claim.sub',$1,true)", [worker]);
+        assert.equal(
+          (await db.query('select * from task_history where task_id=$1', [uid(100)])).rowCount,
+          0,
+        );
+        await assert.rejects(
+          db.query('delete from task_history where task_id=$1', [uid(100)]),
+          /permission denied/,
+        );
+      } finally {
+        await db.query('rollback');
+      }
+    },
+  );
+  await ok('manager can edit and delete objects while task history is retained', async () => {
     await db.query('begin');
     try {
       await db.query('set local role authenticated');
@@ -288,7 +353,7 @@ try {
       assert.equal((await db.query('select * from tasks where project_id=$1', [p1])).rowCount, 0);
       assert.equal(
         (await db.query('select * from task_history where task_id=$1', [uid(100)])).rowCount,
-        0,
+        1,
       );
     } finally {
       await db.query('rollback');
